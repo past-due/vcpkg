@@ -6,6 +6,7 @@
 #include <vcpkg/base/checks.h>
 #include <vcpkg/base/span.h>
 #include <vcpkg/base/system.h>
+#include <vcpkg/base/util.h>
 
 namespace vcpkg::Graphs
 {
@@ -57,6 +58,7 @@ namespace vcpkg::Graphs
                 {
                     status = ExplorationStatus::PARTIALLY_EXPLORED;
                     U vertex_data = f.load_vertex_data(vertex);
+                    auto temp = f.adjacency_list(vertex_data);
                     for (const V& neighbour : f.adjacency_list(vertex_data))
                         topological_sort_internal(neighbour, f, exploration_status, sorted);
 
@@ -83,9 +85,82 @@ namespace vcpkg::Graphs
         return sorted;
     }
 
+    // For each vertex v, count the number of vertices x for which there is a path from v to x.
+    template<class VertexRange, class V, class U>
+    std::unordered_map<V, size_t> count_explorable_vertices(const VertexRange& vertices,
+                                                            const AdjacencyProvider<V, U>& f)
+    {
+        // Need to store vertices to remove duplicates
+        std::unordered_map<V, std::unordered_set<V>> explorable;
+
+        // Visit them in topological order, to guarantee all vertices looked up in the map are already calculated
+        std::vector<U> toposorted = topological_sort(vertices, f);
+
+        for (auto&& vertex : toposorted)
+        {
+            const std::vector<V> neighbours = f.adjacency_list(vertex);
+
+            std::unordered_set<V> accumulator;
+            accumulator.insert(neighbours.cbegin(), neighbours.cend());
+            for (const V& neighbour : f.adjacency_list(vertex))
+            {
+                const std::unordered_set<V>& current = explorable[neighbour];
+                accumulator.insert(current.cbegin(), current.cend());
+            }
+
+            explorable[vertex] = accumulator;
+        }
+
+        std::unordered_map<V, size_t> output;
+        Util::Maps::transform_values(explorable, output, [](auto&& set) -> size_t { return set.size(); });
+        return output;
+    }
+
+    template<class VertexRange, class V, class U>
+    std::unordered_map<V, int> count_indegrees(const VertexRange& vertices, const AdjacencyProvider<V, U>& f)
+    {
+        std::unordered_map<V, int> indegrees;
+
+        for (auto&& vertex : vertices)
+        {
+            U vertex_data = f.load_vertex_data(vertex);
+            for (const V& neighbour : f.adjacency_list(vertex_data))
+            {
+                ++indegrees[neighbour];
+            }
+        }
+
+        return indegrees;
+    }
+
+    template<class VertexRange, class V, class U>
+    std::unordered_map<V, std::unordered_set<U>> reverse_graph(const VertexRange& vertices,
+                                                               const AdjacencyProvider<V, U>& f)
+    {
+        std::unordered_map<V, std::unordered_set<U>> output;
+
+        for (auto&& vertex : vertices)
+        {
+            output[vertex]; // Init
+            U vertex_data = f.load_vertex_data(vertex);
+            for (const V& neighbour : f.adjacency_list(vertex_data))
+            {
+                output[neighbour].insert(vertex_data);
+            }
+        }
+
+        return output;
+    }
+
     template<class V>
     struct Graph final : AdjacencyProvider<V, V>
     {
+    public:
+        Graph() = default;
+
+    private:
+        Graph(std::unordered_map<V, std::unordered_set<V>>&& edges) : m_edges(edges) {}
+
     public:
         void add_vertex(const V& v) { this->m_edges[v]; }
 
@@ -114,6 +189,8 @@ namespace vcpkg::Graphs
         // Note: this function indicates how tied this template is to the exact type it will be templated upon.
         // Possible fix: This type shouldn't implement to_string() and should instead be derived from?
         std::string to_string(const V& spec) const override { return spec->spec.to_string(); }
+
+        Graph<V> reverse() const { return Graph{Graphs::reverse_graph(this->vertex_list(), *this)}; }
 
     private:
         std::unordered_map<V, std::unordered_set<V>> m_edges;
