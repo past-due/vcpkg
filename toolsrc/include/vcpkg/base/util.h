@@ -7,8 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include <vcpkg/base/optional.h>
-
 namespace vcpkg::Util
 {
     template<class Container>
@@ -170,6 +168,8 @@ namespace vcpkg::Util
 
         MoveOnlyBase& operator=(const MoveOnlyBase&) = delete;
         MoveOnlyBase& operator=(MoveOnlyBase&&) = default;
+
+        ~MoveOnlyBase() = default;
     };
 
     struct ResourceBase
@@ -180,6 +180,8 @@ namespace vcpkg::Util
 
         ResourceBase& operator=(const ResourceBase&) = delete;
         ResourceBase& operator=(ResourceBase&&) = delete;
+
+        ~ResourceBase() = default;
     };
 
     template<class T>
@@ -225,5 +227,11 @@ namespace vcpkg::Util
         {
             return e == E::YES;
         }
+    }
+
+    template<class T>
+    void unused(T&& param)
+    {
+        (void)param;
     }
 }
