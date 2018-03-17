@@ -134,6 +134,27 @@ namespace vcpkg::Graphs
     }
 
     template<class VertexRange, class V, class U>
+    std::unordered_map<V, int> find_path_lengths(const VertexRange& vertices, const AdjacencyProvider<V, U>& f)
+    {
+        const std::vector<V> toposorted = topological_sort(vertices, f);
+        std::unordered_map<V, int> length_of_path_to;
+
+        for (auto&& vertex : toposorted)
+        {
+            int accumulator = 0;
+            U vertex_data = f.load_vertex_data(vertex);
+            for (const V& neighbour : f.adjacency_list(vertex_data))
+            {
+                accumulator = std::max(accumulator, length_of_path_to[neighbour]);
+            }
+
+            length_of_path_to[vertex] = 1 + accumulator;
+        }
+
+        return length_of_path_to;
+    }
+
+    template<class VertexRange, class V, class U>
     std::unordered_map<V, std::unordered_set<U>> reverse_graph(const VertexRange& vertices,
                                                                const AdjacencyProvider<V, U>& f)
     {

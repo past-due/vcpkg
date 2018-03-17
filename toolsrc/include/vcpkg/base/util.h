@@ -71,6 +71,28 @@ namespace vcpkg::Util
         return ret;
     }
 
+    template<class Container, class T, class BinaryOp>
+    T reduce(const Container& cont, T init, BinaryOp binary_op)
+    {
+        T accumulator = init;
+        for (auto&& item : cont)
+        {
+            accumulator = binary_op(accumulator, item);
+        }
+        return accumulator;
+    }
+
+    template<class AssocContainer, class T, class BinaryOp>
+    T reduce_values(const AssocContainer& cont, T init, BinaryOp binary_op)
+    {
+        T accumulator = init;
+        for (auto&& item : cont)
+        {
+            accumulator = binary_op(accumulator, item.second);
+        }
+        return accumulator;
+    }
+
     template<class Container, class Pred>
     void stable_keep_if(Container& cont, Pred pred)
     {
