@@ -402,7 +402,6 @@ glfw3:x64-uwp=fail
 glib:x64-uwp=fail
 glib:x64-windows-static=fail
 glib:x64-windows-static-md=fail
-glib:x64-osx=fail
 gmmlib:arm64-windows=fail
 gmmlib:arm-uwp=fail
 gmmlib:x64-osx=fail
