@@ -1,0 +1,39 @@
+diff --git a/BUILD.gn b/BUILD.gn
+index e9c3a3e..9c73cc5 100644
+--- a/BUILD.gn
++++ b/BUILD.gn
+@@ -374,7 +374,7 @@ config("build_id_config") {
+   ldflags = [ "-Wl,--build-id" ]
+ }
+ 
+-_use_copy_compiler_dll = angle_has_build && is_win
++_use_copy_compiler_dll = false
+ 
+ if (_use_copy_compiler_dll) {
+   copy("copy_compiler_dll") {
+diff --git a/gni/angle.gni b/gni/angle.gni
+index 2feede6..695ad48 100644
+--- a/gni/angle.gni
++++ b/gni/angle.gni
+@@ -74,12 +74,12 @@ if (angle_has_build) {
+     angle_use_vulkan_display = (is_linux || is_chromeos) && !is_ggp
+   }
+ } else {
++  import("//build_overrides/build.gni")
+   declare_args() {
+     is_ubsan = false
+     is_tsan = false
+     is_asan = false
+     is_lsan = false
+-    build_with_chromium = false
+     dcheck_always_on = false
+     angle_use_x11 = (is_linux || is_chromeos) && !is_ggp
+     angle_use_wayland = is_linux && !is_ggp
+@@ -89,6 +89,7 @@ if (angle_has_build) {
+     ozone_platform_headless = false
+     use_fuzzing_engine = false
+     is_apple = is_mac || is_ios
++    is_cfi = false
+   }
+ 
+   declare_args() {

@@ -11,7 +11,8 @@ vcpkg_from_github(
     REF 5d4df51d1d7d6a290d54111527a4798f10c7ca3c 	#chromium/6478
     SHA512 240040edee01a3c3eb94915bf4d46c7e2c52d8aed538a8a7ae71d4a84f061fda2586445ae7c6c6f299098cc2348ba76a06e27bc649a1b59c941fff23fbfa79ab
     # On update check headers against opengl-registry
-#    PATCHES
+   PATCHES
+       002-angle-build.patch
 #        001-fix-uwp.patch
 #        002-fix-builder-error.patch
 #        003-fix-mingw.patch
@@ -23,6 +24,15 @@ vcpkg_from_github(
 vcpkg_find_acquire_program(PYTHON3)
 get_filename_component(PYTHON3_DIR "${PYTHON3}" DIRECTORY)
 vcpkg_add_to_path(PREPEND "${PYTHON3_DIR}")
+
+set(ENV{DEPOT_TOOLS_WIN_TOOLCHAIN} 0)
+
+vcpkg_find_acquire_program(GN)
+get_filename_component(GN_PATH ${GN} DIRECTORY)
+
+vcpkg_add_to_path(PREPEND "${GN_PATH}")
+
+set(VCPKG_KEEP_ENV_VARS PATH;DEPOT_TOOLS_WIN_TOOLCHAIN)
 
 # Generate gclient config
 #vcpkg_execute_in_download_mode(
@@ -129,11 +139,11 @@ v8_fetch(
         REF 923a565b97768d3a51047c3f384f6a0d17990192
         SOURCE ${SOURCE_PATH})
 
-v8_fetch(
-        DESTINATION third_party/dawn
-        URL https://dawn.googlesource.com/dawn.git
-        REF d32858a3045a89e8c5ff919107ee76c8b103afdf
-        SOURCE ${SOURCE_PATH})
+# v8_fetch(
+#         DESTINATION third_party/dawn
+#         URL https://dawn.googlesource.com/dawn.git
+#         REF d32858a3045a89e8c5ff919107ee76c8b103afdf
+#         SOURCE ${SOURCE_PATH})
 
 #third_party/EGL-Registry/src ?
 
@@ -231,6 +241,12 @@ v8_fetch(
         REF 7d77fb7fd66d8a5640618ad32c71fdeb7d3e02df
         SOURCE ${SOURCE_PATH})
 
+vcpkg_execute_required_process(
+        COMMAND "${PYTHON3}" "build/util/lastchange.py" -o build/util/LASTCHANGE
+        WORKING_DIRECTORY ${SOURCE_PATH}
+        LOGNAME build-${TARGET_TRIPLET}
+)
+
 
 string(JOIN " " OPTIONS
     "target_cpu=\"${VCPKG_TARGET_ARCHITECTURE}\""
@@ -276,7 +292,7 @@ if(angle_use_clang)
 	endif()
 	get_filename_component(CLANG "${CLANG}" DIRECTORY)
 	get_filename_component(CLANG "${CLANG}" DIRECTORY)
-	if((VCPKG_TARGET_IS_WINDOWS AND NOT EXISTS "${CLANG}/bin/clang-cl.exe") OR
+	if((VCPKG_TARGET_IS_WINDOWS AND NOT EXISTS "${CLANG}/bin/clang-cl.exe" AND NOT VCPKG_TARGET_IS_MINGW) OR
 	   (VCPKG_TARGET_IS_OSX AND NOT EXISTS "${CLANG}/bin/clang"))
 		message(FATAL_ERROR "Clang needs to be inside a bin directory.")
 	endif()
@@ -306,6 +322,9 @@ if(VCPKG_TARGET_IS_UWP)
 	string(REGEX REPLACE "\\\\+$" "" WindowsSdkDir $ENV{WindowsSdkDir})
 	file(APPEND "${SOURCE_PATH}/build/config/gclient_args.gni" "windows_sdk_path = \"${WindowsSdkDir}\"\n")
 endif()
+
+# Fixup Python path to use vcpkg-installed python tool
+vcpkg_replace_string("${SOURCE_PATH}/.gn" "script_executable = \"python3\"" "script_executable = \"${PYTHON3}\"")
 
 vcpkg_gn_configure(
     SOURCE_PATH "${SOURCE_PATH}"
