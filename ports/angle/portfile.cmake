@@ -3,184 +3,323 @@ if (VCPKG_TARGET_IS_LINUX)
     message(WARNING "${PORT} currently requires the following libraries from the system package manager:\n    libx11-dev\n    mesa-common-dev\n    libxi-dev\n    libxext-dev\n\nThese can be installed on Ubuntu systems via apt-get install libx11-dev mesa-common-dev libxi-dev libxext-dev.")
 endif()
 
-if (VCPKG_TARGET_ARCHITECTURE STREQUAL "x86")
-    set(ANGLE_CPU_BITNESS ANGLE_IS_32_BIT_CPU)
-elseif (VCPKG_TARGET_ARCHITECTURE STREQUAL "x64")
-    set(ANGLE_CPU_BITNESS ANGLE_IS_64_BIT_CPU)
-elseif (VCPKG_TARGET_ARCHITECTURE STREQUAL "arm")
-    set(ANGLE_CPU_BITNESS ANGLE_IS_32_BIT_CPU)
-elseif (VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
-    set(ANGLE_CPU_BITNESS ANGLE_IS_64_BIT_CPU)
-else()
-    message(FATAL_ERROR "Unsupported architecture: ${VCPKG_TARGET_ARCHITECTURE}")
-endif()
-
-set(ANGLE_USE_D3D11_COMPOSITOR_NATIVE_WINDOW "OFF")
-if (VCPKG_TARGET_IS_WINDOWS OR VCPKG_TARGET_IS_UWP)
-  set(ANGLE_BUILDSYSTEM_PORT "Win")
-  if (NOT VCPKG_TARGET_IS_MINGW)
-    set(ANGLE_USE_D3D11_COMPOSITOR_NATIVE_WINDOW "ON")
-  endif()
-elseif (VCPKG_TARGET_IS_OSX)
-  set(ANGLE_BUILDSYSTEM_PORT "Mac")
-elseif (VCPKG_TARGET_IS_LINUX)
-  set(ANGLE_BUILDSYSTEM_PORT "Linux")
-else()
-  # default other platforms to "Linux" config
-  set(ANGLE_BUILDSYSTEM_PORT "Linux")
-endif()
-
-# chromium/5414
-set(ANGLE_COMMIT aa63ea230e0c507e7b4b164a30e502fb17168c17)
-set(ANGLE_VERSION 5414)
-set(ANGLE_SHA512 a3b55d4b484e1e9ece515d60af1d47a80a0576b198d9a2397e4e68b16efd83468dcdfadc98dae57ff17f01d02d74526f8b59fdf00661b70a45b6dd266e5ffe38)
-set(ANGLE_THIRDPARTY_ZLIB_COMMIT 44d9b490c721abdb923d5c6c23ac211e45ffb1a5)
+vcpkg_get_windows_sdk(WINDOWS_SDK)
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO google/angle
-    REF ${ANGLE_COMMIT}
-    SHA512 ${ANGLE_SHA512}
+    REF 5d4df51d1d7d6a290d54111527a4798f10c7ca3c 	#chromium/6478
+    SHA512 240040edee01a3c3eb94915bf4d46c7e2c52d8aed538a8a7ae71d4a84f061fda2586445ae7c6c6f299098cc2348ba76a06e27bc649a1b59c941fff23fbfa79ab
     # On update check headers against opengl-registry
-    PATCHES
-        001-fix-uwp.patch
-        002-fix-builder-error.patch
-        003-fix-mingw.patch
+#    PATCHES
+#        001-fix-uwp.patch
+#        002-fix-builder-error.patch
+#        003-fix-mingw.patch
 )
 
-# Generate angle_commit.h
-set(ANGLE_COMMIT_HASH_SIZE 12)
-string(SUBSTRING "${ANGLE_COMMIT}" 0 ${ANGLE_COMMIT_HASH_SIZE} ANGLE_COMMIT_HASH)
-set(ANGLE_COMMIT_DATE "invalid-date")
-set(ANGLE_REVISION "${ANGLE_VERSION}")
-configure_file("${CMAKE_CURRENT_LIST_DIR}/angle_commit.h.in" "${SOURCE_PATH}/angle_commit.h" @ONLY)
-configure_file("${CMAKE_CURRENT_LIST_DIR}/angle_commit.h.in" "${SOURCE_PATH}/src/common/angle_commit.h" @ONLY)
-file(COPY "${CMAKE_CURRENT_LIST_DIR}/unofficial-angle-config.cmake" DESTINATION "${SOURCE_PATH}")
+# TODO: Fetch depot_tools
+# https://chromium.googlesource.com/chromium/tools/depot_tools.git
 
-set(ANGLE_WEBKIT_BUILDSYSTEM_COMMIT "bb1da00b9ba878d228a5e9834a0767dbca2fee43")
-
-# Download WebKit gni-to-cmake.py conversion script
-vcpkg_download_distfile(GNI_TO_CMAKE_PY
-    URLS "https://github.com/WebKit/WebKit/raw/${ANGLE_WEBKIT_BUILDSYSTEM_COMMIT}/Source/ThirdParty/ANGLE/gni-to-cmake.py"
-    FILENAME "gni-to-cmake.py"
-    SHA512 9da35caf2db2e849d6cc85721ba0b77eee06b6f65a7c5314fb80483db4949b0b6e9bf4b2d4fc63613665629b24e9b052e03fb1451b09313d881297771a4f2736
-)
-
-# Generate CMake files from GN / GNI files
 vcpkg_find_acquire_program(PYTHON3)
+get_filename_component(PYTHON3_DIR "${PYTHON3}" DIRECTORY)
+vcpkg_add_to_path(PREPEND "${PYTHON3_DIR}")
 
-set(_root_gni_files_to_convert
-  "compiler.gni Compiler.cmake"
-  "libGLESv2.gni GLESv2.cmake"
-)
-set(_renderer_gn_files_to_convert
-  "libANGLE/renderer/d3d/BUILD.gn D3D.cmake"
-  "libANGLE/renderer/gl/BUILD.gn GL.cmake"
-  "libANGLE/renderer/metal/BUILD.gn Metal.cmake"
-)
+# Generate gclient config
+#vcpkg_execute_in_download_mode(
+#    COMMAND "${PYTHON3}" "${SOURCE_PATH}/scripts/bootstrap.py"
+#    WORKING_DIRECTORY "${SOURCE_PATH}"
+#)
 
-foreach(_root_gni_file IN LISTS _root_gni_files_to_convert)
-  separate_arguments(_file_values UNIX_COMMAND "${_root_gni_file}")
-  list(GET _file_values 0 _src_gn_file)
-  list(GET _file_values 1 _dst_file)
-  vcpkg_execute_required_process(
-      COMMAND "${PYTHON3}" "${GNI_TO_CMAKE_PY}" "src/${_src_gn_file}" "${_dst_file}"
-      WORKING_DIRECTORY "${SOURCE_PATH}"
-      LOGNAME "gni-to-cmake-${_dst_file}-${TARGET_TRIPLET}"
-  )
-endforeach()
+# TODO: Run gclient sync to fetch dependencies
+#vcpkg_execute_in_download_mode(
+#    COMMAND "${PYTHON3}" "${SOURCE_PATH}/scripts/bootstrap.py"
+#    WORKING_DIRECTORY "${SOURCE_PATH}"
+#)
 
-foreach(_renderer_gn_file IN LISTS _renderer_gn_files_to_convert)
-  separate_arguments(_file_values UNIX_COMMAND "${_renderer_gn_file}")
-  list(GET _file_values 0 _src_gn_file)
-  list(GET _file_values 1 _dst_file)
-  get_filename_component(_src_dir "${_src_gn_file}" DIRECTORY)
-  vcpkg_execute_required_process(
-      COMMAND "${PYTHON3}" "${GNI_TO_CMAKE_PY}" "src/${_src_gn_file}" "${_dst_file}" --prepend "src/${_src_dir}/"
-      WORKING_DIRECTORY "${SOURCE_PATH}"
-      LOGNAME "gni-to-cmake-${_dst_file}-${TARGET_TRIPLET}"
-  )
-endforeach()
 
-# Fetch additional CMake files from WebKit ANGLE buildsystem
-vcpkg_download_distfile(WK_ANGLE_INCLUDE_CMAKELISTS
-    URLS "https://github.com/WebKit/WebKit/raw/${ANGLE_WEBKIT_BUILDSYSTEM_COMMIT}/Source/ThirdParty/ANGLE/include/CMakeLists.txt"
-    FILENAME "include_CMakeLists.txt"
-    SHA512 a7ddf3c6df7565e232f87ec651cc4fd84240b8866609e23e3e6e41d22532fd34c70e0f3b06120fd3d6d930ca29c1d0d470d4c8cb7003a66f8c1a840a42f32949
-)
-configure_file("${WK_ANGLE_INCLUDE_CMAKELISTS}" "${SOURCE_PATH}/include/CMakeLists.txt" COPYONLY)
 
-vcpkg_download_distfile(WK_ANGLE_CMAKE_WEBKITCOMPILERFLAGS
-    URLS "https://github.com/WebKit/WebKit/raw/${ANGLE_WEBKIT_BUILDSYSTEM_COMMIT}/Source/cmake/WebKitCompilerFlags.cmake"
-    FILENAME "WebKitCompilerFlags.cmake"
-    SHA512 63f981694ae37d4c4ca4c34e2bf62b4d4602b6a1a660851304fa7a6ee834fc58fa6730eeb41ef4e075550f3c8b675823d4d00bdcd72ca869c6d5ab11196b33bb
-)
-file(COPY "${WK_ANGLE_CMAKE_WEBKITCOMPILERFLAGS}" DESTINATION "${SOURCE_PATH}/cmake")
+function(v8_fetch)
+  set(flagArgs FETCH_SUBMODULES)
+  set(oneValueArgs DESTINATION URL REF SOURCE)
+  set(multipleValuesArgs PATCHES)
+  cmake_parse_arguments(V8 "${flagArgs}" "${oneValueArgs}" "${multipleValuesArgs}" ${ARGN})
 
-vcpkg_download_distfile(WK_ANGLE_CMAKE_WEBKITMACROS
-    URLS "https://github.com/WebKit/WebKit/raw/${ANGLE_WEBKIT_BUILDSYSTEM_COMMIT}/Source/cmake/WebKitMacros.cmake"
-    FILENAME "WebKitMacros.cmake"
-    SHA512 0d126b1d1b0ca995c2ea6e51c73326db363f560f3f07912ce58c7c022d9257d27b963dac56aee0e9604ca7a3d74c5aa9f0451c243fec922fb485dd2253685ab6
-)
-file(COPY "${WK_ANGLE_CMAKE_WEBKITMACROS}" DESTINATION "${SOURCE_PATH}/cmake")
+  if(NOT DEFINED V8_DESTINATION)
+    message(FATAL_ERROR "DESTINATION must be specified.")
+  endif()
 
-# Copy additional custom CMake buildsystem into appropriate folders
-file(GLOB MAIN_BUILDSYSTEM "${CMAKE_CURRENT_LIST_DIR}/cmake-buildsystem/CMakeLists.txt" "${CMAKE_CURRENT_LIST_DIR}/cmake-buildsystem/*.cmake")
-file(COPY ${MAIN_BUILDSYSTEM} DESTINATION "${SOURCE_PATH}")
-file(GLOB MODULES "${CMAKE_CURRENT_LIST_DIR}/cmake-buildsystem/cmake/*.cmake")
-file(COPY ${MODULES} DESTINATION "${SOURCE_PATH}/cmake")
+  if(NOT DEFINED V8_URL)
+    message(FATAL_ERROR "The git url must be specified")
+  endif()
 
-function(checkout_in_path PATH URL REF)
-    if(EXISTS "${PATH}")
-        return()
-    endif()
+  if(NOT DEFINED V8_REF)
+    message(FATAL_ERROR "The git ref must be specified.")
+  endif()
 
-    vcpkg_from_git(
-        OUT_SOURCE_PATH DEP_SOURCE_PATH
-        URL "${URL}"
-        REF "${REF}"
-    )
-    file(RENAME "${DEP_SOURCE_PATH}" "${PATH}")
-    file(REMOVE_RECURSE "${DEP_SOURCE_PATH}")
+  if(EXISTS ${V8_SOURCE}/${V8_DESTINATION}/.git)
+        vcpkg_execute_required_process(
+                COMMAND ${GIT} reset --hard
+                WORKING_DIRECTORY ${V8_SOURCE}/${V8_DESTINATION}
+                LOGNAME build-${TARGET_TRIPLET})
+  else()
+		message(STATUS "Fetching: ${V8_DESTINATION}")
+        vcpkg_execute_required_process(
+                COMMAND ${GIT} clone --depth 1 ${V8_URL} ${V8_DESTINATION}
+                WORKING_DIRECTORY ${V8_SOURCE}
+                LOGNAME build-${TARGET_TRIPLET})
+        vcpkg_execute_required_process(
+                COMMAND ${GIT} fetch --depth 1 origin ${V8_REF}
+                WORKING_DIRECTORY ${V8_SOURCE}/${V8_DESTINATION}
+                LOGNAME build-${TARGET_TRIPLET})
+        vcpkg_execute_required_process(
+                COMMAND ${GIT} checkout FETCH_HEAD
+                WORKING_DIRECTORY ${V8_SOURCE}/${V8_DESTINATION}
+                LOGNAME build-${TARGET_TRIPLET})
+  endif()
+  if (V8_FETCH_SUBMODULES)
+        vcpkg_execute_required_process(
+                COMMAND ${GIT} submodule update --init --recursive
+                WORKING_DIRECTORY ${V8_SOURCE}/${V8_DESTINATION}
+                LOGNAME build-${TARGET_TRIPLET})
+  endif()
+  foreach(PATCH ${V8_PATCHES})
+        vcpkg_execute_required_process(
+                        COMMAND ${GIT} apply ${PATCH}
+                        WORKING_DIRECTORY ${V8_SOURCE}/${V8_DESTINATION}
+                        LOGNAME build-${TARGET_TRIPLET})
+  endforeach()
 endfunction()
 
-checkout_in_path(
-    "${SOURCE_PATH}/third_party/zlib"
-    "https://chromium.googlesource.com/chromium/src/third_party/zlib"
-    "${ANGLE_THIRDPARTY_ZLIB_COMMIT}"
+message(STATUS "Fetching submodules")
+v8_fetch(
+        DESTINATION build
+        URL https://chromium.googlesource.com/chromium/src/build.git
+        REF ef48ed5d9583911c48a5de44b3fd01308f1b1732
+        SOURCE ${SOURCE_PATH}
+        PATCHES ${CURRENT_PORT_DIR}/build.patch
+)
+#v8_fetch(
+#        DESTINATION buildtools
+#        URL https://chromium.googlesource.com/chromium/src/buildtools.git
+#        REF 4e0e9c73a0f26735f034f09a9cab2a5c0178536b
+#        SOURCE ${SOURCE_PATH}
+#        # PATCHES ${CURRENT_PORT_DIR}/build.patch
+#)
+
+v8_fetch(
+        DESTINATION testing
+        URL https://chromium.googlesource.com/chromium/src/testing
+        REF 066811c908ecb8f4fc8c4927ff646ce03c58e95d
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/abseil-cpp
+        URL https://chromium.googlesource.com/chromium/src/third_party/abseil-cpp
+        REF 8c54b7dae4c4692f32abe9b3e8113cdf0a8842b9
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/astc-encoder/src
+        URL https://github.com/ARM-software/astc-encoder
+        REF 573c475389bf51d16a5c3fc8348092e094e50e8f
+        SOURCE ${SOURCE_PATH})
+v8_fetch(
+        DESTINATION third_party/catapult
+        URL https://chromium.googlesource.com/catapult.git
+        REF 923a565b97768d3a51047c3f384f6a0d17990192
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/dawn
+        URL https://dawn.googlesource.com/dawn.git
+        REF d32858a3045a89e8c5ff919107ee76c8b103afdf
+        SOURCE ${SOURCE_PATH})
+
+#third_party/EGL-Registry/src ?
+
+v8_fetch(
+        DESTINATION third_party/googletest
+        URL https://chromium.googlesource.com/chromium/src/third_party/googletest
+        REF 17bbed2084d3127bd7bcd27283f18d7a5861bea8
+        SOURCE ${SOURCE_PATH}
+        FETCH_SUBMODULES)
+
+v8_fetch(
+        DESTINATION third_party/libdrm
+        URL https://chromium.googlesource.com/chromiumos/third_party/libdrm
+        REF 474894ed17a037a464e5bd845a0765a50f647898
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/libpng/src
+        URL https://chromium.googlesource.com/chromiumos/third_party/libdrm
+        REF 474894ed17a037a464e5bd845a0765a50f647898
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/jinja2
+        URL https://chromium.googlesource.com/chromium/src/third_party/jinja2.git
+        REF c9c77525ea20c871a1d4658f8d312b51266d4bad
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/jsoncpp
+        URL https://chromium.googlesource.com/chromium/src/third_party/jsoncpp
+        REF f62d44704b4da6014aa231cfc116e7fd29617d2a
+        SOURCE ${SOURCE_PATH})
+
+# Current revision of jsoncpp.
+# Note: this dep cannot be auto-rolled b/c of nesting.
+set(jsoncpp_revision "42e892d96e47b1f6e29844cc705e148ec4856448")
+v8_fetch(
+        DESTINATION third_party/jsoncpp/source
+        URL https://chromium.googlesource.com/external/github.com/open-source-parsers/jsoncpp.git
+        REF ${jsoncpp_revision}
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/markupsafe
+        URL https://chromium.googlesource.com/chromium/src/third_party/markupsafe.git
+        REF e582d7f0edb9d67499b0f5abd6ae5550e91da7f2
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/nasm
+        URL https://chromium.googlesource.com/chromium/deps/nasm.git
+        REF f477acb1049f5e043904b87b825c5915084a9a29
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/protobuf
+        URL https://chromium.googlesource.com/chromium/src/third_party/protobuf
+        REF 4abbe88863a7dd75dd11da0487e9b995133f7592
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/rapidjson/src
+        URL https://chromium.googlesource.com/external/github.com/Tencent/rapidjson
+        REF 781a4e667d84aeedbeb8184b7b62425ea66ec59f
+        SOURCE ${SOURCE_PATH})
+
+v8_fetch(
+        DESTINATION third_party/SwiftShader
+        URL https://swiftshader.googlesource.com/SwiftShader
+        REF da334852e70510d259bfa8cbaa7c5412966b2f41
+        SOURCE ${SOURCE_PATH})
+
+#third_party/VK-GL-CTS/src
+
+v8_fetch(
+        DESTINATION third_party/vulkan-deps
+        URL https://chromium.googlesource.com/vulkan-deps
+        REF 7e66c5e2f87e2475f6a2033af6cf37cedc7c3422
+        SOURCE ${SOURCE_PATH}
+        FETCH_SUBMODULES)
+v8_fetch(
+        DESTINATION third_party/vulkan_memory_allocator
+        URL https://chromium.googlesource.com/external/github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+        REF 56300b29fbfcc693ee6609ddad3fdd5b7a449a21
+        SOURCE ${SOURCE_PATH})
+
+
+#IF LINUX
+#third_party/wayland
+
+v8_fetch(
+        DESTINATION third_party/zlib
+        URL https://chromium.googlesource.com/chromium/src/third_party/zlib.git
+        REF 7d77fb7fd66d8a5640618ad32c71fdeb7d3e02df
+        SOURCE ${SOURCE_PATH})
+
+
+string(JOIN " " OPTIONS
+    "target_cpu=\"${VCPKG_TARGET_ARCHITECTURE}\""
+    angle_enable_wgpu=false
+    angle_has_histograms=false
+    angle_build_tests=false
+    chrome_pgo_phase=0
+    use_sysroot=false
+    is_clang=false
+    use_custom_libcxx=false
+    treat_warnings_as_errors=false
 )
 
-vcpkg_cmake_configure(
+set(OPTIONS_DBG "is_debug=true")
+set(OPTIONS_REL "is_official_build=true")
+
+set(angle_use_clang TRUE)
+
+if(VCPKG_TARGET_IS_ANDROID)
+    string(APPEND OPTIONS " target_os=\"android\"")
+elseif(VCPKG_TARGET_IS_OSX)
+    string(APPEND OPTIONS " target_os=\"mac\"")
+elseif(VCPKG_TARGET_IS_IOS)
+    string(APPEND OPTIONS " target_os=\"ios\"")
+elseif(VCPKG_TARGET_IS_EMSCRIPTEN)
+    string(APPEND OPTIONS " target_os=\"wasm\"")
+elseif(VCPKG_TARGET_IS_WINDOWS)
+    if(VCPKG_TARGET_IS_UWP)
+		string(APPEND OPTIONS " target_os=\"winuwp\"")
+		set(angle_use_clang FALSE)
+	else()
+		string(APPEND OPTIONS " target_os=\"win\"")
+    endif()
+endif()
+
+if(angle_use_clang)
+	# Find the directory that contains "bin/clang"
+	# Note: Only clang-cl is supported on Windows, see https://crbug.com/988071
+	vcpkg_find_acquire_program(CLANG)
+	if(CLANG MATCHES "-NOTFOUND")
+		message(FATAL_ERROR "Clang is required.")
+	endif()
+	get_filename_component(CLANG "${CLANG}" DIRECTORY)
+	get_filename_component(CLANG "${CLANG}" DIRECTORY)
+	if((VCPKG_TARGET_IS_WINDOWS AND NOT EXISTS "${CLANG}/bin/clang-cl.exe") OR
+	   (VCPKG_TARGET_IS_OSX AND NOT EXISTS "${CLANG}/bin/clang"))
+		message(FATAL_ERROR "Clang needs to be inside a bin directory.")
+	endif()
+	message(STATUS "CLANG=${CLANG}")
+	set(OPTIONS "${OPTIONS} clang_base_path=\"${CLANG}\"")
+#	string(APPEND OPTIONS " is_clang=true")
+#else()
+#	string(APPEND OPTIONS " is_clang=false")
+endif()
+
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
+    string(APPEND OPTIONS " is_component_build=true")
+    vcpkg_list(SET ANGLE_TARGETS :libEGL :libGLESv1_CM :libGLESv2)
+else()
+    string(APPEND OPTIONS " is_component_build=false")
+    vcpkg_list(SET ANGLE_TARGETS :libEGL_static :libGLESv2_static :preprocessor :translator)
+endif()
+
+if("vulkan" IN_LIST FEATURES)
+    string(APPEND OPTIONS " angle_enable_vulkan=true")
+else()
+	string(APPEND OPTIONS " angle_enable_vulkan=false")
+endif()
+
+file(WRITE "${SOURCE_PATH}/build/config/gclient_args.gni" "checkout_angle_internal = false\ncheckout_angle_mesa = false\ncheckout_angle_restricted_traces = false\ngenerate_location_tags = false\n")
+if(VCPKG_TARGET_IS_UWP)
+	string(REGEX REPLACE "\\\\+$" "" WindowsSdkDir $ENV{WindowsSdkDir})
+	file(APPEND "${SOURCE_PATH}/build/config/gclient_args.gni" "windows_sdk_path = \"${WindowsSdkDir}\"\n")
+endif()
+
+vcpkg_gn_configure(
     SOURCE_PATH "${SOURCE_PATH}"
-    OPTIONS_DEBUG -DDISABLE_INSTALL_HEADERS=1
-    OPTIONS
-        "-D${ANGLE_CPU_BITNESS}=1"
-        "-DPORT=${ANGLE_BUILDSYSTEM_PORT}"
-        "-DANGLE_USE_D3D11_COMPOSITOR_NATIVE_WINDOW=${ANGLE_USE_D3D11_COMPOSITOR_NATIVE_WINDOW}"
-        "-DVCPKG_TARGET_IS_WINDOWS=${VCPKG_TARGET_IS_WINDOWS}"
+    OPTIONS "${OPTIONS}"
+    OPTIONS_DEBUG "${OPTIONS_DBG}"
+    OPTIONS_RELEASE "${OPTIONS_REL}"
 )
 
-vcpkg_cmake_install()
+message(STATUS "Building libANGLE. Please wait...")
 
-vcpkg_cmake_config_fixup(CONFIG_PATH share/unofficial-angle PACKAGE_NAME unofficial-angle)
+vcpkg_gn_install(
+    SOURCE_PATH "${SOURCE_PATH}"
+    TARGETS ${ANGLE_TARGETS}
+)
 
 vcpkg_copy_pdbs()
 
-file(INSTALL "${SOURCE_PATH}/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)
-
-file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
-# Remove empty directories inside include directory
-file(GLOB directory_children RELATIVE "${CURRENT_PACKAGES_DIR}/include" "${CURRENT_PACKAGES_DIR}/include/*")
-foreach(directory_child ${directory_children})
-    if(IS_DIRECTORY "${CURRENT_PACKAGES_DIR}/include/${directory_child}")
-        file(GLOB_RECURSE subdirectory_children "${CURRENT_PACKAGES_DIR}/include/${directory_child}/*")
-        if("${subdirectory_children}" STREQUAL "")
-            file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/include/${directory_child}")
-        endif()
-    endif()
-endforeach()
-unset(subdirectory_children)
-unset(directory_child)
-unset(directory_children)
-
-file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
+# TODO: Generate CMake config...
