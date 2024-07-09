@@ -235,6 +235,7 @@ v8_fetch(
 string(JOIN " " OPTIONS
     "target_cpu=\"${VCPKG_TARGET_ARCHITECTURE}\""
     angle_enable_wgpu=false
+    angle_enable_swiftshader=false
     angle_has_histograms=false
     angle_build_tests=false
     chrome_pgo_phase=0
